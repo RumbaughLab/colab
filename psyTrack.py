@@ -8,56 +8,89 @@ import path
 import psytrack as psy
 import sys
 import matplotlib.pyplot as plt
+import concurrent.futures
+import time
 
 # !pip install ibllib==1.4.7
 from oneibl.onelight import ONE
 
 def listFiles(fpath):
     pathoutput = fpath + os.sep + 'fileList.csv'
-    allFiles = set(glob.glob(fpath+'/**/*.xlsx', recursive=True)) # get all the excel file in folder
-    settingFiles = set(glob.glob(fpath+'/**/settings.xlsx', recursive = True)) # get all the settings file
+    
+    if glob.glob(pathoutput) == [pathoutput]:
+        print('The files list has already been genereated:')
+        print(pathoutput)
+    else:
 
-    wdilFiles = allFiles - settingFiles # exclude the settings files
-    wdilFiles = list(wdilFiles) # convert the set to a list
+        allFiles = set(glob.glob(fpath+'/**/*.xlsx', recursive=True)) # get all the excel file in folder
+        settingFiles = set(glob.glob(fpath+'/**/settings.xlsx', recursive = True)) # get all the settings file
 
-    print('alllFiles: ', len(allFiles), ' wdilFiles: ', len(wdilFiles))
-    print(wdilFiles)
+        wdilFiles = allFiles - settingFiles # exclude the settings files
+        wdilFiles = list(wdilFiles) # convert the set to a list
 
-    # important to sort the list to obtain proper sequence 
-    wdilFiles.sort()
-    wdilFiles = pd.DataFrame({'file': wdilFiles})
-    wdilFiles.to_csv(pathoutput)
+        print('alllFiles: ', len(allFiles), ' wdilFiles: ', len(wdilFiles))
+        print(wdilFiles)
 
+        # important to sort the list to obtain proper sequence 
+        wdilFiles.sort()
+        wdilFiles = pd.DataFrame({'file': wdilFiles})
+        wdilFiles.to_csv(pathoutput)
 
-    return print(wdilFiles)
-    return print('saved: ', pathoutput)
+        return print(wdilFiles)
+        return print('saved: ', pathoutput)
 
-def formatWDILfile(path):
+def formatWDILfile(mypath, fromList = True):
     '''
     Function to concatenate all the wdil file into one 
     to be able to run psytrack
 
     Args:
-    path (str): with all the files 
+    mypath (str): with all the files 
+    fromList (logical): default to true this means that the files will be retrieved based on a list of folder not
+    just the excel file which are present 
     '''
+    if fromList == False:
+        allFiles = set(glob.glob(mypath+'/**/*.xlsx', recursive=True)) # get all the excel file in folder
+        settingFiles = set(glob.glob(mypath+'/**/settings.xlsx', recursive = True)) # get all the settings file
 
-    allFiles = set(glob.glob(path+'/**/*.xlsx', recursive=True)) # get all the excel file in folder
-    settingFiles = set(glob.glob(path+'/**/settings.xlsx', recursive = True)) # get all the settings file
+        wdilFiles = allFiles - settingFiles # exclude the settings files
+        wdilFiles = list(wdilFiles) # convert the set to a list
 
-    wdilFiles = allFiles - settingFiles # exclude the settings files
-    wdilFiles = list(wdilFiles) # convert the set to a list
+        # print('alllFiles: ', len(allFiles), ' wdilFiles: ', len(wdilFiles))
+        # print(wdilFiles)
 
-    print('alllFiles: ', len(allFiles), ' wdilFiles: ', len(wdilFiles))
-    print(wdilFiles)
+        # important to sort the list to obtain proper sequence 
+        wdilFiles.sort()
 
-    # important to sort the list to obtain proper sequence 
-    wdilFiles.sort()
+    else:
+        #####################################
+        ## TODO implement filter and category
+        #####################################
+
+        pathoutput = mypath + os.sep + 'fileList.csv'
+        wdilFiles = pd.read_csv(pathoutput)
+
+        if 'discard' in wdilFiles.columns:
+            wdilFiles = wdilFiles[wdilFiles['discard']!=1] # filter all the files that shouldnot be used
+
+        ## this section is to make it os invariant
+        if 'gvfs' in wdilFiles['file'][0] and sys.platform != 'linux':
+           wdilFiles['fileNoRoot'] = wdilFiles['file'].str.split('/run/user/1000/gvfs/smb-share:server=ishtar,share=millerrumbaughlab/').str[-1]
+           wdilFiles['file'] = wdilFiles.apply(lambda x: tpath(x['fileNoRoot']),axis = 1)
+
+        wdilFiles = list(wdilFiles['file'])
+
+        #####################################
+        ## TODO implement filter and category
+        #####################################
 
     allDat = [] # create an empty object to 
     sID = []
     
     for i in wdilFiles:
         print(i)
+        if '~' in i: # skip open files 
+            continue
         tmp = pd.read_excel(i) # read excel file
 
         ## section to check with previous id and assign absolute order number
@@ -66,7 +99,7 @@ def formatWDILfile(path):
             # print('same')
             k += 1
         else:
-            k=0
+            k = 0
         # print(k)
 
 
@@ -285,7 +318,7 @@ def tpath(mypath, shareDrive = 'Y'):
 
     return newpath
 
-def psyCompute(allDat, sID):
+def psyCompute(allDat, SPATH, sID, figure_off = False):
     fname = SPATH+os.sep+str(sID)+'_fig5b_data.npz'
 
     ## either load or generate the data
@@ -315,12 +348,14 @@ def psyCompute(allDat, sID):
         # Save interim result
         np.savez_compressed(SPATH+os.sep+str(sID)+'_fig5b_data.npz', dat=dat)
 
-        # save the figure
-        fig = psy.plot_weights(dat['wMode'], dat['weights'], days=dat['new_dat']["dayLength"], 
-                               errorbar=dat['W_std'], figsize=(4.75,1.4))
-        # plt.xlabel(None); plt.ylabel(None)
-        # plt.subplots_adjust(0,0,1,1) 
-        plt.savefig(SPATH +os.sep+str(sID)+ "Fig5b.pdf")
+        if figure_off == True:
+            # save the figure
+            fig = psy.plot_weights(dat['wMode'], dat['weights'], days=dat['new_dat']["dayLength"], 
+                                   errorbar=dat['W_std'], figsize=(4.75,1.4))
+            # plt.xlabel(None); plt.ylabel(None)
+            # plt.subplots_adjust(0,0,1,1) 
+            plt.savefig(SPATH +os.sep+str(sID)+ "Fig5b.pdf")
+
 
 def plot_all(all_labels, all_w, Weights, figsize):
     fig = plt.figure(figsize=figsize)
@@ -417,6 +452,7 @@ def plotLabelsandW(geno, SPATH):
     # plt.subplots_adjust(0,0,1,1) 
     plt.savefig(SPATH +os.sep+ geno+ "Fig6e.pdf")
 
+# def checkProcessedFile():
 ###### inputs
 
 ## from the IBL mouse data - figure 3
@@ -440,30 +476,53 @@ RAT_DF = RAT_DF[~np.isnan(RAT_DF["choice"])]   # Remove mistrials
 ### with prior single animal
 #############################
 
-mypath = tpath(r'Sheldon\All_WDIL\WDIL007_SyngapKO_high_stim_1step_12-16-19\forPsyTrack')
-# mypath = tpath(r'Sheldon\All_WDIL\for psytrack\WDIL010Box1+2')
 
+
+## mypath = tpath(r'Sheldon\All_WDIL\WDIL007_SyngapKO_high_stim_1step_12-16-19\forPsyTrack')
+## mypath = tpath(r'Sheldon\All_WDIL\for psytrack\WDIL010Box1+2')
+cohorts = [tpath(r'Sheldon\All_WDIL\WDIL009_EMXcreRUM2_7-20-21\WDIL009_forpsytrack'),  tpath(r'Sheldon\All_WDIL\for psytrack\WDIL007Box1+2'), tpath(r'Sheldon\All_WDIL\for psytrack\WDIL010Box1+2')] # list of all the path and cohort of interest
+# mypath = cohorts[1]/
+
+### create and check for the full file list
+for mypath in cohorts:
+    print(mypath)
+    SPATH =  mypath+os.sep+'output'
+    os.makedirs(SPATH, exist_ok = True)
+
+    ## create a list of files 
+    listFiles(mypath)
+
+    ## load or generate the data
+    if glob.glob(mypath+os.sep+'allDat.csv') == [mypath+os.sep+'allDat.csv']:
+        allDat = pd.read_csv(mypath+os.sep+'allDat.csv')
+    else:
+        allDat = formatWDILfile(mypath)
+        allDat.to_csv(mypath+os.sep+'allDat.csv')
+
+## coding dat file
+mypath = cohorts[1]
 SPATH =  mypath+os.sep+'output'
-os.makedirs(SPATH, exist_ok = True)
-
-listFiles(mypath)
-
-## load or generate the data
 if glob.glob(mypath+os.sep+'allDat.csv') == [mypath+os.sep+'allDat.csv']:
     allDat = pd.read_csv(mypath+os.sep+'allDat.csv')
 else:
     allDat = formatWDILfile(mypath)
     allDat.to_csv(mypath+os.sep+'allDat.csv')
 
-## coding dat file
+## Dealing with NaN
+## important dispaly item for double check
+## dealing with potential missing data in the folder
+print(allDat[allDat.isnull().any(axis=1)])
+allDat = allDat.dropna()
+
+
 allDat = codingDatFile(allDat)
-
 ## add genotype info to the file
-geno = pd.read_csv(tpath(r"Sheldon\All_WDIL\WDIL007_SyngapKO_high_stim_1step_12-16-19\animals.csv"))
-allDat = pd.merge(allDat, geno, on ='sID')
-
 ## adding the genotype to the dat file
 ## then as a first pass can split the file and process wt or het
+geno = pd.read_csv(mypath+os.sep+"animals.csv")
+allDat = pd.merge(allDat, geno, on ='sID')
+
+
 
 sID = 1753 #input the idname of the subeject
 fname = SPATH+os.sep+str(sID)+'_fig5b_data.npz'
@@ -472,24 +531,22 @@ psyCompute(allDat, sID)
 
 
 ### from Rumbaughlab
-### with prior single animal
+### with mulit animal
 #############################
 
-# takes roughly 30 min 
+## takes roughly 30 min with 6 core CPU
+## length highly dependent on number of trials etc.
 all_id = allDat['sID'].unique()
 a = time.time()
 for i, sID in enumerate(all_id):
     print(i, sID)
     try:
-        psyCompute(allDat, sID)
+        psyCompute(allDat, SPATH, sID) ## psyCompute is already parallelized on CPU thus the more cpu the better
     except:
         print('error with: ', sID)
 b = time.time()
 print(b-a)
 
-
-## create a list for the one that acutally worked 
-## so this is based on the output not the initial list
 
 for i in ['wt', 'het']:
     plotLabelsandW(geno=i, SPATH)
