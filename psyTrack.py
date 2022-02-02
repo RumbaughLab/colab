@@ -230,6 +230,12 @@ def convertToDictRat(allDat, subject, first=20000, cutoff=50):
     prior = ((t[1:] - t[:-1]) == 1).astype(int)
     prior = np.hstack(([0], prior))
 
+    # Calculate previous average tone value
+    s_avg = df['Go/NoGo'][:-1]
+    s_avg = (s_avg - np.mean(s_avg))/np.std(s_avg)
+    s_avg = np.hstack(([0], s_avg))
+    s_avg = s_avg * prior  # for trials without a valid previous trial, set to 0
+
     # Calculate previous correct answer
     h = (df["Correct?"][:-1] * 2 - 1).astype(int)   # map from (0,1) to (-1,1)
     h = np.hstack(([0], h))
@@ -242,7 +248,8 @@ def convertToDictRat(allDat, subject, first=20000, cutoff=50):
     
     ## note here that it could be useful to have different stimulus values 
     ## important to respect the dictionary psy.COLORS hence the name of the specific names of the inputs
-    inputs = dict(s1 = np.array(df['Go/NoGo'])[:, None], 
+    inputs = dict(s1 = np.array(df['Go/NoGo'])[:, None],
+                  s_avg = np.array(s_avg)[:, None], 
                   h = np.array(h)[:, None],
                   c = np.array(c)[:, None])
 
@@ -330,7 +337,7 @@ def psyCompute(allDat, SPATH, sID, figure_off = False):
         new_dat = psy.trim(outData, START=0, END=12500)
 
         # here weights could be adjusted 
-        weights = {'bias': 1, 's1': 1, 'h': 1, 'c': 1}
+        weights = {'bias': 1, 's1': 1, 'h': 1, 'c': 1, 's_avg':1}
         K = np.sum([weights[i] for i in weights.keys()])
         # hyper guess are kept with default value as in the paper
         hyper_guess = {
@@ -348,14 +355,15 @@ def psyCompute(allDat, SPATH, sID, figure_off = False):
         # Save interim result
         np.savez_compressed(SPATH+os.sep+str(sID)+'_fig5b_data.npz', dat=dat)
 
-        if figure_off == True:
-            # save the figure
-            fig = psy.plot_weights(dat['wMode'], dat['weights'], days=dat['new_dat']["dayLength"], 
-                                   errorbar=dat['W_std'], figsize=(4.75,1.4))
-            # plt.xlabel(None); plt.ylabel(None)
-            # plt.subplots_adjust(0,0,1,1) 
-            plt.savefig(SPATH +os.sep+str(sID)+ "Fig5b.pdf")
-
+    if figure_off == False:
+        print('graph')
+        # save the figure
+        fig = psy.plot_weights(dat['wMode'], dat['weights'], days=dat['new_dat']["dayLength"], 
+                               errorbar=dat['W_std'], figsize=(4.75,1.4))
+        # plt.xlabel(None); plt.ylabel(None)
+        # plt.subplots_adjust(0,0,1,1) 
+        plt.savefig(SPATH +os.sep+str(sID)+ "Fig5b.pdf")
+        plt.close('all')
 
 def plot_all(all_labels, all_w, Weights, figsize):
     fig = plt.figure(figsize=figsize)
@@ -381,7 +389,7 @@ def plot_all(all_labels, all_w, Weights, figsize):
     # plt.ylim(-2.5, 2.5)
     return fig
 
-def plotLabelsandW(geno, SPATH):
+def plotLabelsandW(genoVar, SPATH):
     '''
     this function will output all the labels and wheight for a givien genotype
     based on the corresponding files and select the genotype of interest
@@ -397,15 +405,15 @@ def plotLabelsandW(geno, SPATH):
     corresp['sID'] = corresp['fname'].str.split(os.sep).str[-1].str.split('_').str[0].astype(int)
    
     ## check and implement the genotypes
-    try: geno
-    except: geno = None
-    if geno is None:
-        geno = pd.read_csv(os.sep.join(SPATH.split(os.sep)[:-2])+os.sep+'animals.csv')
+    # try: geno
+    # except: geno = None
+    # if geno is None:
+    geno = pd.read_csv(os.sep.join(SPATH.split(os.sep)[:-1])+os.sep+'animals.csv')
 
     corresp = pd.merge(corresp, geno, on='sID')
 
     ## 
-    cWTorHet = corresp[corresp['geno']=='wt']
+    cWTorHet = corresp[corresp['geno']==genoVar]
     
     all_labels = []
     all_w = []
@@ -428,7 +436,7 @@ def plotLabelsandW(geno, SPATH):
     # plt.subplots_adjust(0,0,1,1) 
     # plt.gca().set_yticks([-2,0,2])
     # plt.gca().set_xticklabels([])
-    plt.savefig(SPATH +os.sep+ geno+ "Fig6a.pdf")
+    plt.savefig(SPATH +os.sep+ genoVar+ "Fig6a.pdf")
 
     plot_all(all_labels, all_w, ["bias"], myFigsize)
     plt.ylim(-7, 2)
@@ -436,13 +444,13 @@ def plotLabelsandW(geno, SPATH):
     # plt.gca().set_xticklabels([])
     # plt.gca().set_yticklabels([])
     # plt.subplots_adjust(0,0,1,1) 
-    plt.savefig(SPATH +os.sep+ geno+ "Fig6b.pdf")
+    plt.savefig(SPATH +os.sep+ genoVar+ "Fig6b.pdf")
 
     plot_all(all_labels, all_w, ["h"], myFigsize)
     plt.ylim(-1, 1)
     # # plt.gca().set_yticklabels([])
     # plt.subplots_adjust(0,0,1,1) 
-    plt.savefig(SPATH +os.sep+ geno+ "Fig6d.pdf")
+    plt.savefig(SPATH +os.sep+ genoVar+ "Fig6d.pdf")
 
 
     plot_all(all_labels, all_w, ["c"], myFigsize)
@@ -450,7 +458,7 @@ def plotLabelsandW(geno, SPATH):
     # plt.gca().set_yticklabels([])
     # plt.gca().set_xticklabels([])
     # plt.subplots_adjust(0,0,1,1) 
-    plt.savefig(SPATH +os.sep+ geno+ "Fig6e.pdf")
+    plt.savefig(SPATH +os.sep+ genoVar+ "Fig6e.pdf")
 
 # def checkProcessedFile():
 ###### inputs
@@ -481,7 +489,7 @@ RAT_DF = RAT_DF[~np.isnan(RAT_DF["choice"])]   # Remove mistrials
 ## mypath = tpath(r'Sheldon\All_WDIL\WDIL007_SyngapKO_high_stim_1step_12-16-19\forPsyTrack')
 ## mypath = tpath(r'Sheldon\All_WDIL\for psytrack\WDIL010Box1+2')
 cohorts = [tpath(r'Sheldon\All_WDIL\WDIL009_EMXcreRUM2_7-20-21\WDIL009_forpsytrack'),  tpath(r'Sheldon\All_WDIL\for psytrack\WDIL007Box1+2'), tpath(r'Sheldon\All_WDIL\for psytrack\WDIL010Box1+2')] # list of all the path and cohort of interest
-# mypath = cohorts[1]/
+# mypath = cohorts[0]/
 
 ### create and check for the full file list
 for mypath in cohorts:
@@ -505,7 +513,7 @@ SPATH =  mypath+os.sep+'output'
 if glob.glob(mypath+os.sep+'allDat.csv') == [mypath+os.sep+'allDat.csv']:
     allDat = pd.read_csv(mypath+os.sep+'allDat.csv')
 else:
-    allDat = formatWDILfile(mypath)
+    allDat = formatWDILfile(mypath, fromList = False)
     allDat.to_csv(mypath+os.sep+'allDat.csv')
 
 ## Dealing with NaN
@@ -549,4 +557,4 @@ print(b-a)
 
 
 for i in ['wt', 'het']:
-    plotLabelsandW(geno=i, SPATH)
+    plotLabelsandW(genoVar=i, SPATH=SPATH)
