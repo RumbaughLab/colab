@@ -534,7 +534,7 @@ allDat = pd.merge(allDat, geno, on ='sID')
 
 sID = 1753 #input the idname of the subeject
 fname = SPATH+os.sep+str(sID)+'_fig5b_data.npz'
-psyCompute(allDat, sID)
+psyCompute(allDat, SPATH, sID)
 
 
 
