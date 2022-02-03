@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 import concurrent.futures
 import time
 
+
 # !pip install ibllib==1.4.7
 from oneibl.onelight import ONE
 
@@ -120,19 +121,29 @@ def codingDatFile(allDat):
     Function to code all the wdil file into one 
     to be able to run psytrack
 
+    important note based on RatData README file from Brody's lab
+    4) s_a: The loudness of stimulus A (pink noise) in decibels (dB) (NaN during training_stage 1)
+    5) s_b: The loudness of stimulus B (pink noise) in decibels (dB) (NaN during training_stage 1)
+    6) choice: The choice made by the rat, where Left=0 and Right=1 (and Mistrial=NaN)
+    7) correct_side: The correct side, where Left=0 and Right=1
+    8) hit: If the rat made the correct choice, where Incorrect=0 and Correct=1 (and Mistrial=NaN)
+
+    Therefore in the contest of the Go/NoGo task it would be the following
+    4) s1: stimulus for simple go/nogo when parameteres are not change can be reduced to stim (1), no-stim (0)
+    6) Lick? / choice: correspond to the choice of the animal to lick (1) or witheld the the lick (0)
+    7) correct_side or Go/NoGo: equivalent to the stimulus s1 since the Go/NoGo is binary
+    8) Correct? / hit: correspond to the correct choice made by the animal (incorrect=0, correct=1)
+
+
+
     Args:
     allDat
     '''
 
+
     allDat['choice'] = allDat['Lick?']
     allDat = allDat.rename(columns={'Trial#':'trial'})
-    ## establish what are the hit 
-    ## in this case the establishment of hit correspond to true hit:
-    ##      lick and was a Go # if Go=1 and Correct =1 --> CorrectCat ==2 and is a hit
-    ## as well as correct rejection:
-    ##      with held and was a no Go # if Go=0 and Correct =0 --> CorrectCat ==0 and is a hit
-    allDat['CorrectCat']  = allDat['choice'] + allDat['Correct?'] 
-    allDat['hit'] = np.where((allDat['CorrectCat']==2) | (allDat['CorrectCat']==0),1,0)
+    allDat['hit'] = allDat['Correct?']
 
     ## those could be useful for modeling see
     ## comments on Figure F3b use of bias
@@ -237,7 +248,7 @@ def convertToDictRat(allDat, subject, first=20000, cutoff=50):
     s_avg = s_avg * prior  # for trials without a valid previous trial, set to 0
 
     # Calculate previous correct answer
-    h = (df["Correct?"][:-1] * 2 - 1).astype(int)   # map from (0,1) to (-1,1)
+    h = (df['Go/NoGo'][:-1] * 2 - 1).astype(int)   # map from (0,1) to (-1,1)
     h = np.hstack(([0], h))
     h = h * prior  # for trials without a valid previous trial, set to 0
     
@@ -257,8 +268,8 @@ def convertToDictRat(allDat, subject, first=20000, cutoff=50):
         subject = subject,
         inputs = inputs,
         s1 = np.array(df['Go/NoGo']), # correspond to the go/noGo stim
-        correct = np.array(df['hit']), # hit correspond to hit and correct rejection
-        answer = np.array(df['Correct?']), #this is the answer 
+        correct = np.array(df['Correct?']), # hit correspond to hit and correct rejection
+        answer = np.array(df['Go/NoGo']), #this is the answer 
         y = np.array(df['choice']), #this correspond to the Lick
         dayLength=np.array(df.groupby(['session']).size()),
     )
@@ -389,7 +400,25 @@ def plot_all(all_labels, all_w, Weights, figsize):
     # plt.ylim(-2.5, 2.5)
     return fig
 
-def plotLabelsandW(genoVar, SPATH):
+def getLabelsW(cWTorHet):
+    '''
+    cWTorHet(pd.DataFrame)
+    '''
+    
+    all_labels = []
+    all_w = []
+    for i,j in cWTorHet.iterrows():
+        print(i,j)
+        rat = np.load(j['fname'], allow_pickle=True)['dat'].item()
+        labels = []
+        for j in sorted(rat['weights'].keys()):
+            labels += [j]*rat['weights'][j]                
+        all_labels += [np.array(labels)]
+        all_w += [rat['wMode']] 
+
+    return all_labels, all_w
+
+def plotLabelsandW(genoVar, SPATH, splitCriteria = False, customlim=False):
     '''
     this function will output all the labels and wheight for a givien genotype
     based on the corresponding files and select the genotype of interest
@@ -403,62 +432,55 @@ def plotLabelsandW(genoVar, SPATH):
     npzFiles = glob.glob(SPATH+os.sep+'*.npz')
     corresp = pd.DataFrame({'fname':npzFiles})
     corresp['sID'] = corresp['fname'].str.split(os.sep).str[-1].str.split('_').str[0].astype(int)
-   
-    ## check and implement the genotypes
-    # try: geno
-    # except: geno = None
-    # if geno is None:
     geno = pd.read_csv(os.sep.join(SPATH.split(os.sep)[:-1])+os.sep+'animals.csv')
 
     corresp = pd.merge(corresp, geno, on='sID')
-
-    ## 
     cWTorHet = corresp[corresp['geno']==genoVar]
     
-    all_labels = []
-    all_w = []
-
-    for i,j in cWTorHet.iterrows():
-        print(i,j)
-        rat = np.load(j['fname'], allow_pickle=True)['dat'].item()
+    ## save all the data for the given genotype
+    if splitCriteria == False:
+    
+        all_labels, all_w = getLabelsW(cWTorHet)
+        myFigsize = (3.6,1.8)
+        factors = all_labels[0]
+        customlim = [[-7,2], [-1,1], [-1,1], [-1,15], [-5,10]]
         
-        labels = []
-        for j in sorted(rat['weights'].keys()):
-            labels += [j]*rat['weights'][j]
-            
-        all_labels += [np.array(labels)]
-        all_w += [rat['wMode']] 
+        for f in zip(factors,customlim):
+            print(f)
+            plot_all(all_labels, all_w, [f[0]], myFigsize)
+            if customlim == True:
+                plt.ylim(f[1][0], f[1][1])
+            # plt.subplots_adjust(0,0,1,1) 
+            # plt.gca().set_yticks([-2,0,2])
+            # plt.gca().set_xticklabels([])
+            plt.savefig(SPATH +os.sep+ genoVar+ "Fig6_"+f[0]+"_.pdf")
 
 
-    myFigsize = (3.6,1.8)
-    plot_all(all_labels, all_w, ["s1"], myFigsize)
-    plt.ylim(-1, 15)
-    # plt.subplots_adjust(0,0,1,1) 
-    # plt.gca().set_yticks([-2,0,2])
-    # plt.gca().set_xticklabels([])
-    plt.savefig(SPATH +os.sep+ genoVar+ "Fig6a.pdf")
+    ##Split the data for a genotype between animals that reached criteria and those that did not. Save each separately
+    else:
 
-    plot_all(all_labels, all_w, ["bias"], myFigsize)
-    plt.ylim(-7, 2)
-    # plt.gca().set_yticks([-2,0,2])
-    # plt.gca().set_xticklabels([])
-    # plt.gca().set_yticklabels([])
-    # plt.subplots_adjust(0,0,1,1) 
-    plt.savefig(SPATH +os.sep+ genoVar+ "Fig6b.pdf")
+        customCriteria = [0,1]
+        
+        for iCC in customCriteria:
 
-    plot_all(all_labels, all_w, ["h"], myFigsize)
-    plt.ylim(-1, 1)
-    # # plt.gca().set_yticklabels([])
-    # plt.subplots_adjust(0,0,1,1) 
-    plt.savefig(SPATH +os.sep+ genoVar+ "Fig6d.pdf")
+            criteria = cWTorHet[cWTorHet['criteria'] == iCC]
+            all_labels, all_w = getLabelsW(criteria)
 
+            myFigsize = (3.6,1.8)
+            factors = ['s1','bias','s_avg','h','c']
+            flabel = ['a', 'b', 'c', 'd', 'e']
+            customlim = [[-1,15],[-7,2],[-5,10],[-1,1],[-1,1]]
 
-    plot_all(all_labels, all_w, ["c"], myFigsize)
-    plt.ylim(-1, 1)
-    # plt.gca().set_yticklabels([])
-    # plt.gca().set_xticklabels([])
-    # plt.subplots_adjust(0,0,1,1) 
-    plt.savefig(SPATH +os.sep+ genoVar+ "Fig6e.pdf")
+            for f in zip(factors,flabel,customlim):
+                print(f)
+                plot_all(all_labels, all_w, [f[0]], myFigsize)
+                if customlim == True:
+                    plt.ylim(f[2][0], f[2][1])
+                # plt.subplots_adjust(0,0,1,1) 
+                # plt.gca().set_yticks([-2,0,2])
+                # plt.gca().set_xticklabels([])
+                plt.savefig(SPATH +os.sep+ genoVar+ "Fig7_"+f[0]+"_criteria_"+iCC+".pdf")
+
 
 # def checkProcessedFile():
 ###### inputs

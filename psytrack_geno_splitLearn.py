@@ -112,7 +112,7 @@ def plotLabelsandW(geno, SPATH, splitCriteria = False):
             notCriteria_labels += [np.array(labels)]
             notCriteria_w += [rat['wMode']] 
 
-##plot and save figure for animals of the genotype which reached criteria as Fig6a,b,d,e
+    ##plot and save figure for animals of the genotype which reached criteria as Fig6a,b,d,e
 
         myFigsize = (3.6,1.8)
         plot_all(criteria_labels, criteria_w, ["s1"], myFigsize)
@@ -144,7 +144,7 @@ def plotLabelsandW(geno, SPATH, splitCriteria = False):
         # plt.subplots_adjust(0,0,1,1) 
         plt.savefig(SPATH +os.sep+ geno+ "Fig7e.pdf")
 
-##plot and save figure for animals of the genotype which did not reached criteria as Fig6f,g,i,j
+    ##plot and save figure for animals of the genotype which did not reached criteria as Fig6f,g,i,j
 
         myFigsize = (3.6,1.8)
         plot_all(notCriteria_labels, notCriteria_w, ["s1"], myFigsize)
