@@ -540,19 +540,18 @@ else:
 
 
 
+
 ## Dealing with NaN
 ##---------------------------
 ## important dispaly item for double check
 ## dealing with potential missing data in the folder
-for i in allDat.columns:
-    print(i)
-    print(allDat[i].unique())
-print(allDat[allDat.isnull().any(axis=1)])
-df = df[df['EPS'].notna()]
-allDat = allDat.dropna()
 
-
-
+## check 
+# for i in allDat.columns:
+#     print(i)
+#     print(allDat[i].unique())
+print(allDat[allDat['Go/NoGo'].isna()])
+allDat = allDat[allDat['Go/NoGo'].notna()]
 
 allDat = codingDatFile(allDat)
 ## add genotype info to the file
