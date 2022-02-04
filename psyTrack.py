@@ -34,6 +34,8 @@ def listFiles(fpath):
 
         # important to sort the list to obtain proper sequence 
         wdilFiles.sort()
+
+        # 
         wdilFiles = pd.DataFrame({'file': wdilFiles})
         wdilFiles.to_csv(pathoutput)
 
@@ -102,8 +104,6 @@ def formatWDILfile(mypath, fromList = True):
         else:
             k = 0
         # print(k)
-
-
         sID = i.split(os.sep)[-3] # add a column with the id
         sessionDate = i.split(os.sep)[-2]
         tmp['sID'] = sID
@@ -418,7 +418,7 @@ def getLabelsW(cWTorHet):
 
     return all_labels, all_w
 
-def plotLabelsandW(genoVar, SPATH, splitCriteria = False, customlim=False):
+def plotLabelsandW(genoVar, SPATH, splitCriteria = False, customlimTF=False):
     '''
     this function will output all the labels and wheight for a givien genotype
     based on the corresponding files and select the genotype of interest
@@ -448,7 +448,7 @@ def plotLabelsandW(genoVar, SPATH, splitCriteria = False, customlim=False):
         for f in zip(factors,customlim):
             print(f)
             plot_all(all_labels, all_w, [f[0]], myFigsize)
-            if customlim == True:
+            if customlimTF == True:
                 plt.ylim(f[1][0], f[1][1])
             # plt.subplots_adjust(0,0,1,1) 
             # plt.gca().set_yticks([-2,0,2])
@@ -474,7 +474,7 @@ def plotLabelsandW(genoVar, SPATH, splitCriteria = False, customlim=False):
             for f in zip(factors,flabel,customlim):
                 print(f)
                 plot_all(all_labels, all_w, [f[0]], myFigsize)
-                if customlim == True:
+                if customlimTF == True:
                     plt.ylim(f[2][0], f[2][1])
                 # plt.subplots_adjust(0,0,1,1) 
                 # plt.gca().set_yticks([-2,0,2])
@@ -530,7 +530,7 @@ for mypath in cohorts:
         allDat.to_csv(mypath+os.sep+'allDat.csv')
 
 ## coding dat file
-mypath = cohorts[1]
+mypath = cohorts[2]
 SPATH =  mypath+os.sep+'output'
 if glob.glob(mypath+os.sep+'allDat.csv') == [mypath+os.sep+'allDat.csv']:
     allDat = pd.read_csv(mypath+os.sep+'allDat.csv')
@@ -538,11 +538,20 @@ else:
     allDat = formatWDILfile(mypath, fromList = False)
     allDat.to_csv(mypath+os.sep+'allDat.csv')
 
+
+
 ## Dealing with NaN
+##---------------------------
 ## important dispaly item for double check
 ## dealing with potential missing data in the folder
+for i in allDat.columns:
+    print(i)
+    print(allDat[i].unique())
 print(allDat[allDat.isnull().any(axis=1)])
+df = df[df['EPS'].notna()]
 allDat = allDat.dropna()
+
+
 
 
 allDat = codingDatFile(allDat)
